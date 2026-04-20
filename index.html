@@ -39,7 +39,52 @@
     const cameraResult = document.getElementById('camera-result');
     const btnOpenCamera = document.getElementById('btn-open-camera');
     const btnTakePhoto = document.getElementById('btn-take-photo');
-    const btnDownloadPhoto = document.getElementById('btn-download-photo');
+    
+    const getLocationName = async (lat, lon) => {
+        const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&accept-language=id`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(data, "text/xml");
+
+            const addrParts = xmlDoc.getElementsByTagName("addressparts")[0];
+
+            const road = addrParts.getElementsByTagName('road')[0]?.textContent ?? '';
+            const village = addrParts.getElementsByTagName('village')[0]?.textContent ?? '';
+            const city = addrParts.getElementsByTagName('city')[0]?.textContent ?? '';
+            const state = addrParts.getElementsByTagName('state')[0]?.textContent ?? '';
+            const postcode = addrParts.getElementsByTagName('postcode')[0]?.textContent ?? '';
+
+            return `${road}, ${village}, ${city}, ${state} ${postcode}`;
+        } catch (error) {
+            console.error("Error fetching location:", error);
+        }
+    }
+
+    const getCurrentLocation = async () => {
+        return new Promise((resolve, reject) => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        try {
+                            const locationName = await getLocationName(position.coords.latitude, position.coords.longitude);
+                            resolve(locationName);
+                        } catch (error) {
+                            resolve('');
+                        }
+                    },
+                    (error) => {
+                        resolve('');
+                    }
+                );
+            } else {
+                resolve('');
+            }
+        });
+    }
+
 
     const formatDateTime = (date) => {
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -87,7 +132,13 @@
 
             context.font = "14px Arial";
             context.fillStyle = "white";
-            context.fillText(formatDateTime(new Date()), width - 10, height - 20);
+            context.fillText(formatDateTime(new Date()), width - 10, height - 30);
+
+            const location = await getCurrentLocation();
+
+            context.font = "12px Arial";
+            context.fillStyle = "white";
+            context.fillText(location, width - 10, height - 15);
 
             const data = cameraCanvas.toDataURL("image/png");
             cameraResult.setAttribute("src", data);

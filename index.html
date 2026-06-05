@@ -1,67 +1,92 @@
 <html>
-<style>
-    body {
-        box-sizing: border-box;
-        padding: 3rem 4rem;
-    }
 
-    body>* {
-        box-sizing: border-box;
-    }
+<head>
 
-    .camera-wrapper {
-        display: flex;
-        gap: 2rem;
-        align-items: center;
-        margin-bottom: 3rem;
-    }
+    <style>
+        body>.container {
+            box-sizing: border-box;
+            padding: 3rem 4rem;
+        }
 
-    @media (max-width: 1100px) {
-        body {
-            padding: 16px;
+        body>* {
+            box-sizing: border-box;
         }
 
         .camera-wrapper {
-            flex-direction: column;
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            margin-bottom: 3rem;
         }
 
-        #camera-preview, #camera-canvas {
-            max-width: calc(100% - 16px);
-        }
-    }
-</style>
+        @media (max-width: 1100px) {
+            body>.container {
+                padding: 16px;
+            }
 
-<body
-    style="height: 100vh; width: 100vw; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: white; margin: 0;">
-    <button id="btn-open-camera"
-        style="cursor: pointer; padding: 1.5rem 3rem; background-color: black; color: white; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">open
-        camera</button>
-    <div id="camera-opened"
-        style="display: none; align-items: center; justify-content: center; flex-direction: column;">
-        <div class="camera-wrapper">
-            <video id="camera-preview">Video stream not
-                available.</video>
-            <div style="position: relative;">
-                <canvas id="camera-canvas" style="opacity: 0;"></canvas>
-                <img id="camera-result" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%;" />
+            .camera-wrapper {
+                flex-direction: column;
+            }
+
+            #camera-preview,
+            #camera-canvas {
+                max-width: calc(100% - 16px);
+            }
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container"
+        style="height: 100vh; width: 100vw; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: white; margin: 0;">
+        <button id="btn-request-permission"
+            style="display: none; cursor: pointer; padding: 1.5rem 3rem; background-color: black; border: 0; color: white; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">request
+            location permission</button>
+        <button id="btn-open-camera"
+            style="display: none; cursor: pointer; padding: 1.5rem 3rem; background-color: black; border: 0; color: white; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">open
+            camera</button>
+        <div id="camera-opened"
+            style="display: none; align-items: center; justify-content: center; flex-direction: column;">
+            <div class="camera-wrapper">
+                <video id="camera-preview">Video stream not
+                    available.</video>
+                <div style="position: relative;">
+                    <canvas id="camera-canvas" style="opacity: 0;"></canvas>
+                    <img id="camera-result" style="position: absolute; left: 0; top: 0; height: 100%; width: 100%;" />
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; flex-flow: row wrap;">
+                <button id="btn-take-photo"
+                    style="cursor: pointer; padding: 1.5rem 3rem; border: 0; background-color: black; color: white; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">take
+                    photo</button>
+                <button id="btn-download-photo"
+                    style="cursor: pointer; padding: 1.5rem 3rem; border: 0; background-color: lightgray; color: black; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">download
+                    photo</button>
             </div>
         </div>
-        <button id="btn-take-photo"
-            style="cursor: pointer; padding: 1.5rem 3rem; background-color: black; color: white; border-radius: 8px; font-size: 1rem; text-transform: uppercase;">take
-            photo</button>
     </div>
 </body>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js"></script>
 <script lang="js">
     const isMobile = window.innerWidth <= 600;
     const width = isMobile ? window.innerWidth - 48 : 480;
     let height = 0;
     let streaming = false;
+    let localStream = null;
+    let localImage = null;
+    let localLocation = null;
+
+    let isLocationAllowed = false;
 
     const cameraPreview = document.getElementById('camera-preview');
     const cameraCanvas = document.getElementById('camera-canvas');
     const cameraResult = document.getElementById('camera-result');
-    const btnOpenCamera = document.getElementById('btn-open-camera');
+    const btnRequestPermission = document.getElementById('btn-request-permission');
     const btnTakePhoto = document.getElementById('btn-take-photo');
+    const btnDownloadPhoto = document.getElementById('btn-download-photo');
+    const cameraOpened = document.getElementById('camera-opened');
+    const btnOpenCamera = document.getElementById('btn-open-camera');
 
     const getLocationName = async (lat, lon) => {
         const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&accept-language=id`;
@@ -86,26 +111,30 @@
         }
     }
 
-    const getCurrentLocation = async () => {
+    const getCurrentPosition = () => {
         return new Promise((resolve, reject) => {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        try {
-                            const locationName = await getLocationName(position.coords.latitude, position.coords.longitude);
-                            resolve(locationName);
-                        } catch (error) {
-                            resolve('');
-                        }
-                    },
-                    (error) => {
-                        resolve('');
+                    async (position) => resolve(position),
+                    (error) => resolve(null),
+                    {
+                        enableHighAccuracy: true,
                     }
                 );
             } else {
-                resolve('');
+                alert('Geolocation is not supported by this browser.');
+                return resolve(null);
             }
         });
+    }
+
+    const getCurrentLocation = async () => {
+        if (!localLocation) {
+            return '';
+        }
+
+        const locationName = await getLocationName(localLocation.coords.latitude, localLocation.coords.longitude);
+        return locationName;
     }
 
 
@@ -123,23 +152,49 @@
         return `${day} ${currentDate} ${month} ${date.getFullYear()} ${hours}:${minutes}:${seconds}`;
     }
 
-    const handleOpenCamera = (ev) => {
-        console.log(navigator.mediaDevices);
-        if (navigator.mediaDevices) {
-            navigator.mediaDevices
-                .getUserMedia({ video: true, audio: false })
-                .then((stream) => {
-                    document.getElementById('camera-opened').style.display = 'flex';
-                    document.getElementById('btn-open-camera').style.display = 'none';
+    const openPermissionLoading = () => {
+        Swal.fire({
+            title: "Please wait",
+            html: "requesting permission...",
+            didOpen: () => {
+                Swal.showLoading();
+            },
+        });
+    }
 
-                    cameraPreview.srcObject = stream;
-                    cameraPreview.play();
-                })
-                .catch((err) => {
-                    console.error(`An error occurred: ${err}`);
-                });
-        }
+    const doOpenCamera = (ev) => {
+        btnOpenCamera.style.display = 'block';
+        cameraOpened.style.display = 'none';
 
+        return new Promise((resolve, reject) => {
+            if (navigator.mediaDevices) {
+                navigator.mediaDevices
+                    .getUserMedia({ video: true, audio: false })
+                    .then((stream) => {
+                        localStream = stream;
+
+                        cameraPreview.srcObject = stream;
+                        cameraPreview.play();
+
+                        btnOpenCamera.style.display = 'none';
+                        cameraOpened.style.display = 'flex';
+
+                        resolve(true);
+                    })
+                    .catch((err) => {
+                        if (err.name === 'NotAllowedError') {
+                            alert('Please allow camera access to use this app!');
+                        }
+
+                        console.error(`An error occurred: ${err}`);
+
+                        resolve(false);
+                    });
+            } else {
+                alert('Sorry, camera not available.');
+                resolve(false);
+            }
+        });
     }
 
     const handleTakePhoto = async (ev) => {
@@ -164,12 +219,74 @@
             context.fillText(location, width - 10, height - 15);
 
             const data = cameraCanvas.toDataURL("image/png");
+
+            localImage = data;
             cameraResult.setAttribute("src", data);
         }
     }
 
-    btnOpenCamera.addEventListener('click', handleOpenCamera);
+    const handleVisibilityChange = async () => {
+        if (document.visibilityState === 'hidden') {
+            if (localStream) {
+                cameraPreview.srcObject = null;
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                btnOpenCamera.style.display = 'block';
+                cameraOpened.style.display = 'none';
+            }
+        }
+    }
+
+    const handleDownloadPhoto = () => {
+        if (localImage) {
+            const link = document.createElement('a');
+            link.href = localImage;
+            link.download = `photo_${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+        } else {
+            alert('Please take a photo first!');
+        }
+    }
+
+    const handleRequestLocationPermission = async () => {
+        btnRequestPermission.style.display = 'none';
+
+        openPermissionLoading();
+
+        const position = await getCurrentPosition();
+
+        if (!position) {
+            btnRequestPermission.style.display = 'block';
+            alert('Please allow location access to use this app!');
+            Swal.close();
+            return;
+        }
+
+        localLocation = position;
+        isLocationAllowed = true;
+
+        btnRequestPermission.style.display = 'none';
+
+        const camera = await doOpenCamera();
+
+        Swal.close();
+    }
+
+    const handleOpenCamera = async () => {
+        openPermissionLoading();
+
+        const camera = await doOpenCamera();
+
+        Swal.close();
+    }
+
     btnTakePhoto.addEventListener('click', handleTakePhoto);
+    btnDownloadPhoto.addEventListener('click', handleDownloadPhoto);
+    btnRequestPermission.addEventListener('click', handleRequestLocationPermission);
+    btnOpenCamera.addEventListener('click', handleOpenCamera);
 
     cameraPreview.addEventListener("canplay", (ev) => {
         if (!streaming) {
@@ -182,6 +299,10 @@
             streaming = true;
         }
     });
+
+    document.addEventListener('visibilitychange', () => handleVisibilityChange());
+
+    handleRequestLocationPermission();
 </script>
 
 </html>
